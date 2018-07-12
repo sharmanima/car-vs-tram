@@ -91,6 +91,71 @@ output.empty_tram_B2A = empty_tram_B2A;
 
 % Rest passenger flow
 pass_flow_rest = max(0, pass_flow - tram_freq * tram_params.n_pass);
+
+pass_flow_rest_A2B = pass_flow_A2B - tram_freq * tram_params.n_pass;
+temp = pass_flow_rest_A2B < 0;
+pass_flow_rest_A2B(temp) = 0;
+
+pass_flow_rest_B2A = pass_flow_B2A - tram_freq * tram_params.n_pass;
+temp = pass_flow_rest_B2A < 0;
+pass_flow_rest_B2A(temp) = 0;
+output.pass_flow_rest = pass_flow_rest;
+
+n_pass = car_params.n_pass;
+car_trips_A2B = pass_flow_rest_A2B /n_pass;
+car_trips_B2A = pass_flow_rest_B2A /n_pass;
+
+% All Cars come back to A at the end of day
+flow_capacity_A_start =  num_cars_grid *  car_params.n_pass;
+flow_capacity_A_end = flow_capacity_A_start;
+
+[m , n] = size(pass_flow_rest);
+empty_trips_B2A = zeros(m,n);
+empty_trips_A2B = zeros(m,n);
+flow_capacity_B_start = zeros(m,n);
+flow_capacity_B_end = flow_capacity_B_start;
+
+for i = 1:m
+    for    j = 1:n
+        if j > 1
+            if flow_capacity_A_end(i,j-1) < pass_flow_rest_A2B(i,j)
+                empty_trips_B2A(i,j) = (pass_flow_rest_A2B(i,j) - flow_capacity_A_end(i,j-1))/n_pass;
+                flow_capacity_A_end(i,j) = flow_capacity_A_start(i,j)+ ( - car_trips_A2B(i,j) + car_trips_B2A(i,j) + empty_trips_B2A(i,j))* n_pass;
+                
+            elseif pass_flow_rest_A2B(i,j) < pass_flow_rest_B2A(i,j)
+                empty_trips_A2B(i,j) = ( pass_flow_rest_B2A(i,j) - pass_flow_rest_A2B(i,j))/n_pass;
+                flow_capacity_B_end(i,j) = flow_capacity_B_start(i,j)+ (- car_trips_B2A(i,j) + car_trips_A2B(i,j) + empty_trips_A2B(i,j))* n_pass;
+            else
+                flow_capacity_A_end(i,j) = flow_capacity_A_start(i,j)+ (- car_trips_A2B(i,j) + car_trips_B2A(i,j)) * n_pass;
+                flow_capacity_B_end(i,j) = flow_capacity_B_start(i,j)+(- car_trips_B2A(i,j) + car_trips_A2B(i,j)) * n_pass;
+            end          
+            flow_capacity_A_start(i,j) = flow_capacity_A_end(i,j-1);
+            flow_capacity_B_start(i,j) = flow_capacity_B_end(i,j-1);
+        else 
+            flow_capacity_A_end(i,j) = flow_capacity_A_start(i,j) - pass_flow_rest_A2B(i,j) + pass_flow_rest_B2A(i,j);
+            flow_capacity_B_end(i,j) = pass_flow_rest_A2B(i,j) - pass_flow_rest_B2A(i,j);
+        end
+    end
+end
+
+round_trips = min(car_trips_A2B, car_trips_B2A);
+
+% Car frequency
+car_freq = ceil(pass_flow_rest / car_params.n_pass);
+unused_cars = num_cars_grid - car_freq;
+output.car_freq = car_freq;
+output.unused_cars = unused_cars;
+
+output.flow_capacity_A = flow_capacity_A_end;
+output.flow_capacity_B = flow_capacity_B_end;
+output.empty_trips_A2B = empty_trips_A2B;
+output.empty_trips_B2A = empty_trips_B2A;
+output.car_trips_A2B = car_trips_A2B;
+output.car_trips_B2A = car_trips_B2A;
+output.round_trips = round_trips;
+
+% Rest passenger flow
+pass_flow_rest = max(0, pass_flow - tram_freq * tram_params.n_pass);
 output.pass_flow_rest = pass_flow_rest;
 
 % Car frequency
